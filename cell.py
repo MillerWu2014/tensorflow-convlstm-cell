@@ -3,6 +3,12 @@ import tensorflow as tf
 class ConvLSTMCell(tf.nn.rnn_cell.RNNCell):
   """A LSTM cell with convolutions instead of multiplications.
 
+  parameters
+  ----------
+    shape: list, intputs x shape, [width, high], such as the figure's width and high.
+    filters: int, the conv filter numbers, such as 32, 12. It's feature map number in CNN.
+    kernel: list, the conv filter size.
+
   Reference:
     Xingjian, S. H. I., et al. "Convolutional LSTM network: A machine learning approach for precipitation nowcasting." Advances in Neural Information Processing Systems. 2015.
   """
@@ -16,8 +22,8 @@ class ConvLSTMCell(tf.nn.rnn_cell.RNNCell):
     self._normalize = normalize
     self._peephole = peephole
     if data_format == 'channels_last':
-        self._size = tf.TensorShape(shape + [self._filters])
-        self._feature_axis = self._size.ndims
+        self._size = tf.TensorShape(shape + [self._filters])  # [w, h, n_filters]
+        self._feature_axis = self._size.ndims  # 2
         self._data_format = None
     elif data_format == 'channels_first':
         self._size = tf.TensorShape([self._filters] + shape)
@@ -35,12 +41,22 @@ class ConvLSTMCell(tf.nn.rnn_cell.RNNCell):
     return self._size
 
   def call(self, x, state):
+    """this method is called by dynamic_rnn or static_rnn. compute cell output and state.
+    
+    Arguments:
+      x {tensor} -- the inputs x size is [batch_size, timesteps, width, high, channels]
+      state {tensor} -- the param can not set value, the init value use zero tensor.
+    
+    Returns:
+      tuple -- the state and output.
+    """
+
     c, h = state
 
     x = tf.concat([x, h], axis=self._feature_axis)
     n = x.shape[-1].value
     m = 4 * self._filters if self._filters > 1 else 4
-    W = tf.get_variable('kernel', self._kernel + [n, m])
+    W = tf.get_variable('kernel', self._kernel + [n, m])  # the conv weight size, n is input n-channels, m is conv outputs channels.
     y = tf.nn.convolution(x, W, 'SAME', data_format=self._data_format)
     if not self._normalize:
       y += tf.get_variable('bias', [m], initializer=tf.zeros_initializer())
